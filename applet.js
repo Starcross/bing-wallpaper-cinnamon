@@ -30,19 +30,20 @@ BingWallpaperApplet.prototype = {
         _httpSession.queue_message(request, (_httpSession, message) => {
             const json = JSON.parse(message.response_body.data);
             this.imageData = json.images[0];
-            global.log(`Got image url:${this.imageData.url}`);
-            this._download_image();
+            //global.log(`Got image url:${this.imageData.url}`);
+            this._downloadImage();
         });
 
     },
 
-    _download_image: function() {
+    _downloadImage: function() {
 
         const url = `${bingHost}${this.imageData.url}`;
 
         const userPicturesDir = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_PICTURES);
 
-        let gFile = Gio.file_new_for_path(userPicturesDir + '/BingWallpaper.jpg');
+        this.wallpaperPath = `${userPicturesDir}/BingWallpaper.jpg`;
+        let gFile = Gio.file_new_for_path(this.wallpaperPath);
 
         // open the file
         let fStream = gFile.replace(null, false, Gio.FileCreateFlags.NONE, null);
@@ -58,19 +59,27 @@ BingWallpaperApplet.prototype = {
         });
 
         // queue the http request
-        _httpSession.queue_message(request, function(httpSession, message) {
+        _httpSession.queue_message(request, (httpSession, message) => {
             // request completed
             fStream.close(null);
             if (message.status_code === 200) {
-                global.log('Download successful');
-                //this._setBackground();
+                //global.log('Download successful');
+                this._setBackground();
             } else {
                 global.log("Couldn't fetch image from " + url);
                 //gFile.delete(null);
             }
         });
-    }
+    },
 
+    _setBackground: function() {
+        let gSetting = new Gio.Settings({schema: 'org.cinnamon.desktop.background'});
+        const uri = 'file://' + this.wallpaperPath;
+        gSetting.set_string('picture-uri', uri);
+        gSetting.set_string('picture-options', 'zoom');
+        Gio.Settings.sync();
+        gSetting.apply();
+    }
 };
 
 
