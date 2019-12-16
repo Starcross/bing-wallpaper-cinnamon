@@ -5,7 +5,7 @@ const GLib = imports.gi.GLib;
 const Mainloop = imports.mainloop;
 const Lang = imports.lang;
 
-const logging = true;
+const logging = false;
 
 const _httpSession = new Soup.SessionAsync();
 Soup.Session.prototype.add_feature.call(_httpSession, new Soup.ProxyResolverDefault());
@@ -14,7 +14,7 @@ const bingHost = 'https://www.bing.com';
 const bingRequestPath = '/HPImageArchive.aspx?format=js&idx=0&n=1&mbl=1&mkt=';
 
 function log(message) {
-    if (logging) global.log(message);
+    if (logging) global.log(`[bing-wallpaper@starcross.dev]: ${message}`);
 }
 
 function BingWallpaperApplet(orientation, panel_height, instance_id) {
@@ -28,7 +28,7 @@ BingWallpaperApplet.prototype = {
 
         // Generic Setup
         Applet.IconApplet.prototype._init.call(this, orientation, panel_height, instance_id);
-        this.set_applet_icon_name("wallpaper");
+        this.set_applet_icon_name("bing-wallpaper-symbolic");
         this.set_applet_tooltip(_("Bing Desktop Wallpaper"));
 
         // Find file path to write
@@ -40,11 +40,9 @@ BingWallpaperApplet.prototype = {
     },
 
     _refresh: function() {
-        let now = GLib.DateTime.new_now_local();
-        let today = GLib.DateTime.new_local(now.get_year(), now.get_month(), now.get_day_of_month(), 0, 0, 0);
-        let tomorrow_unix = today.to_unix() + 86400;
-        let wait_time = tomorrow_unix - now.to_unix();
-        wait_time = Math.max(60, wait_time); // Ensure at least 60s
+        log(`Beginning refresh`);
+        const now = GLib.DateTime.new_now_local();
+        const today = GLib.DateTime.new_local(now.get_year(), now.get_month(), now.get_day_of_month(), 0, 0, 0);
 
         let file = Gio.file_new_for_path(this.wallpaperPath);
         let file_exists = file.query_exists(null);
@@ -57,12 +55,11 @@ BingWallpaperApplet.prototype = {
             if ((file_mod_secs < today.to_unix()) || !file_size) { // Is the image old, or empty?
                 log("Calling loadImageData");
                 this._loadImageData();
-            }
+            } else log("Skipping, image appears up to date");
         } else {
             this._loadImageData()
         }
-        this._removeTimeout();
-        this._timeout = Mainloop.timeout_add_seconds(wait_time, Lang.bind(this, this._refresh));
+        this._setTimeout(300);
     },
 
     _removeTimeout: function () {
@@ -72,13 +69,17 @@ BingWallpaperApplet.prototype = {
         }
     },
 
-    _resetTimeout: function() {
+    _setTimeout: function(seconds) {
         /** Cancel current timeout in event of an error and try again shortly */
         this._removeTimeout();
-        this._timeout = Mainloop.timeout_add_seconds(60, Lang.bind(this, this._refresh));
+        log(`Setting timeout (${seconds}s)`);
+        this._timeout = Mainloop.timeout_add_seconds(seconds, Lang.bind(this, this._refresh));
     },
 
     destroy: function () {
+        this._removeTimeout();
+    },
+    on_applet_removed_from_panel() {
         this._removeTimeout();
     },
 
@@ -91,10 +92,18 @@ BingWallpaperApplet.prototype = {
                 this.imageData = json.images[0];
                 this.set_applet_tooltip(this.imageData.copyright);
                 log(`Got image url: ${this.imageData.url}`);
+
+                /**const end_date = GLib.DateTime.new_local(
+                  this.imageData.enddate.substring(0,4),
+                  this.imageData.enddate.substring(4,6),
+                  this.imageData.enddate.substring(6,8),
+                  0, 0, 0
+                );*/
                 this._downloadImage();
+
             } else {
-                log(`Failed to acquire image url`);
-                this._resetTimeout()  // Try again
+                log(`Failed to acquire image url (${message.status_code})`);
+                this._setTimeout(60)  // Try again
             }
         });
     },
@@ -126,7 +135,7 @@ BingWallpaperApplet.prototype = {
                 this._setBackground();
             } else {
                 log("Couldn't fetch image from " + url);
-                this._resetTimeout()  // Try again
+                this._setTimeout(60)  // Try again
             }
         });
     },

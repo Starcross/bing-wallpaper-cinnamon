@@ -1,6 +1,5 @@
 {
     "uuid": "bing-wallpaper@starcross.dev",
     "name": "Bing Desktop Wallpaper",
-    "description": "Apply Today's Bing Wallpaper to your desktop",
-    "icon": "wallpaper"
+    "description": "Download and apply Today's Bing Wallpaper to your desktop"
 }
